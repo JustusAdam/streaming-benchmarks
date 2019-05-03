@@ -26,6 +26,7 @@ KAFKA_DIR="kafka_$SCALA_BIN_VERSION-$KAFKA_VERSION"
 FLINK_DIR="flink-$FLINK_VERSION"
 SPARK_DIR="spark-$SPARK_VERSION-bin-hadoop2.7"
 APEX_DIR="apex-$APEX_VERSION"
+STATEFULNESS_DIR="statefulness"
 
 #Get one of the closet apache mirrors
 APACHE_MIRROR=$"https://archive.apache.org/dist"
@@ -136,7 +137,7 @@ run() {
 	echo 'storm.workers: 1' >> $CONF_FILE
 	echo 'storm.ackers: 2' >> $CONF_FILE
 	echo 'spark.batchtime: 2000' >> $CONF_FILE
-	
+
     $MVN clean install -Dspark.version="$SPARK_VERSION" -Dkafka.version="$KAFKA_VERSION" -Dflink.version="$FLINK_VERSION" -Dstorm.version="$STORM_VERSION" -Dscala.binary.version="$SCALA_BIN_VERSION" -Dscala.version="$SCALA_BIN_VERSION.$SCALA_SUB_VERSION" -Dapex.version="$APEX_VERSION"
 
     #Fetch and build Redis
@@ -147,12 +148,14 @@ run() {
     $MAKE
     cd ..
 
+    # The apex setup is commented out, because the command fails in the earlier mvn install phase.
+
     #Fetch Apex
-    APEX_FILE="$APEX_DIR.tgz.gz"
-    fetch_untar_file "$APEX_FILE" "$APACHE_MIRROR/apex/apache-apex-core-$APEX_VERSION/apex-$APEX_VERSION-source-release.tar.gz"
-    cd $APEX_DIR
-    $MVN clean install -DskipTests
-    cd ..
+    # APEX_FILE="$APEX_DIR.tgz.gz"
+    # fetch_untar_file "$APEX_FILE" "$APACHE_MIRROR/apex/apache-apex-core-$APEX_VERSION/apex-$APEX_VERSION-source-release.tar.gz"
+    # cd $APEX_DIR
+    # $MVN clean install -DskipTests
+    # cd ..
 
     #Fetch Kafka
     KAFKA_FILE="$KAFKA_DIR.tgz"
@@ -249,6 +252,16 @@ run() {
   elif [ "STOP_SPARK_PROCESSING" = "$OPERATION" ];
   then
     stop_if_needed spark.benchmark.KafkaRedisAdvertisingStream "Spark Client Process"
+  elif [ "START_OHUA" = "$OPERATION" ];
+  then
+      DIR=`pwd`
+      cd $STATEFULNESS_DIR
+      stack run ohua-stream-bench $DIR/conf/localConf.yaml &
+      cd $DIR
+      sleep 5
+  elif [ "STOP_OHUA" = "$OPERATION" ];
+  then
+      stop_if_needed "ohua-stream-bench" "Ohua stream-bench executable"
   elif [ "START_FLINK_PROCESSING" = "$OPERATION" ];
   then
     "$FLINK_DIR/bin/flink" run ./flink-benchmarks/target/flink-benchmarks-0.1.0.jar --confPath $CONF_FILE &
@@ -341,6 +354,19 @@ run() {
     run "STOP_KAFKA"
     run "STOP_REDIS"
     run "STOP_ZK"
+  elif [ "OHUA_TEST" = "$OPERATION" ];
+  then
+      run "START_ZK"
+      run "START_REDIS"
+      run "START_KAFKA"
+      run "START_OHUA"
+      run "START_LOAD"
+      sleep $TEST_TIME
+      run "STOP_LOAD"
+      run "STOP_OHUA"
+      run "STOP_KAFKA"
+      run "STOP_REDIS"
+      run "STOP_ZK"
   elif [ "STOP_ALL" = "$OPERATION" ];
   then
     run "STOP_LOAD"
@@ -353,6 +379,7 @@ run() {
     run "STOP_KAFKA"
     run "STOP_REDIS"
     run "STOP_ZK"
+    run "STOP_OHUA"
   else
     if [ "HELP" != "$OPERATION" ];
     then
@@ -377,7 +404,9 @@ run() {
     echo "STOP_SPARK: kill spark processes"
     echo "START_APEX: run the Apex test processing"
     echo "STOP_APEX: kill the Apex test processing"
-    echo 
+    echo "START_OHUA: run the Ohua test processing"
+    echo "STOP_OHUA: kill the Ohua test processing"
+    echo
     echo "START_STORM_TOPOLOGY: run the storm test topology"
     echo "STOP_STORM_TOPOLOGY: kill the storm test topology"
     echo "START_FLINK_PROCESSING: run the flink test processing"
@@ -389,6 +418,7 @@ run() {
     echo "FLINK_TEST: run flink test (assumes SETUP is done)"
     echo "SPARK_TEST: run spark test (assumes SETUP is done)"
     echo "APEX_TEST: run Apex test (assumes SETUP is done)"
+    echo "OHUA_TEST: run Ohua test (assumes SETUP is done)"
     echo "STOP_ALL: stop everything"
     echo
     echo "HELP: print out this message"
