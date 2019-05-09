@@ -11,8 +11,8 @@ MVN=${MVN:-mvn}
 GIT=${GIT:-git}
 MAKE=${MAKE:-make}
 
-KAFKA_VERSION=${KAFKA_VERSION:-"0.8.2.1"}
-#KAFKA_VERSION=${KAFKA_VERSION:-"2.2.0"}
+#KAFKA_VERSION=${KAFKA_VERSION:-"0.8.2.1"}
+KAFKA_VERSION=${KAFKA_VERSION:-"2.2.0"}
 REDIS_VERSION=${REDIS_VERSION:-"4.0.11"}
 SCALA_BIN_VERSION=${SCALA_BIN_VERSION:-"2.11"}
 SCALA_SUB_VERSION=${SCALA_SUB_VERSION:-"12"}
@@ -40,6 +40,7 @@ PARTITIONS=${PARTITIONS:-1}
 LOAD=${LOAD:-1000}
 CONF_FILE=./conf/localConf.yaml
 TEST_TIME=${TEST_TIME:-240}
+OHUA_CORES=${OHUA_CORES:-8}
 
 pid_match() {
    local VAL=`ps -aef | grep "$1" | grep -v grep | awk '{print $2}'`
@@ -265,12 +266,24 @@ run() {
   then
       DIR=`pwd`
       cd $STATEFULNESS_DIR
-      stack run ohua-stream-bench $DIR/conf/localConf.yaml &
+      stack run -- ohua-stream-bench $DIR/conf/localConf.yaml +RTS -N$OHUA_CORES &
       cd $DIR
       sleep 5
   elif [ "STOP_OHUA" = "$OPERATION" ];
   then
-      stop_if_needed "ohua-stream-bench" "Ohua stream-bench executable"
+      local PID=`pid_match "ohua-stream-bench"`
+      if [[ "$PID" -ne "" ]];
+      then
+          kill -2 "$PID"
+          # sleep 5
+          # local CHECK_AGAIN=`pid_match "ohua-stream-bench"`
+          # if [[ "$CHECK_AGAIN" -ne "" ]];
+          # then
+          #     kill -9 "$CHECK_AGAIN"
+          # fi
+      else
+          echo "No ohua instance found to stop"
+      fi
   elif [ "START_FLINK_PROCESSING" = "$OPERATION" ];
   then
     "$FLINK_DIR/bin/flink" run ./flink-benchmarks/target/flink-benchmarks-0.1.0.jar --confPath $CONF_FILE &
