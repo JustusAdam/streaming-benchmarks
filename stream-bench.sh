@@ -12,6 +12,7 @@ GIT=${GIT:-git}
 MAKE=${MAKE:-make}
 
 KAFKA_VERSION=${KAFKA_VERSION:-"0.8.2.1"}
+#KAFKA_VERSION=${KAFKA_VERSION:-"2.2.0"}
 REDIS_VERSION=${REDIS_VERSION:-"4.0.11"}
 SCALA_BIN_VERSION=${SCALA_BIN_VERSION:-"2.11"}
 SCALA_SUB_VERSION=${SCALA_SUB_VERSION:-"12"}
@@ -172,7 +173,10 @@ run() {
     #Fetch Spark
     SPARK_FILE="$SPARK_DIR.tgz"
     fetch_untar_file "$SPARK_FILE" "$APACHE_MIRROR/spark/spark-$SPARK_VERSION/$SPARK_FILE"
-
+  elif [ "FETCH_KAFKA" = "$OPERATION" ];
+  then
+      KAFKA_FILE="$KAFKA_DIR.tgz"
+      fetch_untar_file "$KAFKA_FILE" "$APACHE_MIRROR/kafka/$KAFKA_VERSION/$KAFKA_FILE"
   elif [ "START_ZK" = "$OPERATION" ];
   then
     start_if_needed dev_zookeeper ZooKeeper 10 "$STORM_DIR/bin/storm" dev-zookeeper
@@ -235,8 +239,13 @@ run() {
   then
     stop_if_needed leiningen.core.main "Load Generation"
     cd data
-    $LEIN run -g --configPath ../$CONF_FILE || true
+    $LEIN run -g --configPath ../$CONF_FILE
     cd ..
+  elif [ "CREATE_STATS" = "$OPERATION" ];
+  then
+      cd data
+      $LEIN run -g --configPath ../$CONF_FILE
+      cd ..
   elif [ "START_STORM_TOPOLOGY" = "$OPERATION" ];
   then
     "$STORM_DIR/bin/storm" jar ./storm-benchmarks/target/storm-benchmarks-0.1.0.jar storm.benchmark.AdvertisingTopology test-topo -conf $CONF_FILE
